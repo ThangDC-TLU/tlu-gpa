@@ -6,25 +6,19 @@
   <meta name="color-scheme" content="light dark" />
   <meta name="theme-color" content="#0f172a" />
   <title>Đăng nhập – Lưu GPA</title>
-  <!-- <link rel="icon" href="/favicon.ico"> -->
   <style>
     :root{
-      --bg: #0b1020;
-      --card: #0f172a;
-      --muted: #8ea0bf;
-      --primary: #3b82f6;
-      --primary-600: #2563eb;
-      --ring: rgba(59,130,246,.35);
-      --ok-bg: #0f2b19; --ok-bd:#1f6a3a; --ok-fg:#b8f7d1;
+      --bg:#0b1020; --card:#0f172a; --muted:#8ea0bf; --primary:#3b82f6; --primary-600:#2563eb;
+      --ring:rgba(59,130,246,.35);
+      --ok-bg:#0f2b19; --ok-bd:#1f6a3a; --ok-fg:#b8f7d1;
       --err-bg:#3a0f17; --err-bd:#8a2636; --err-fg:#ffd0d6;
-      --border:#1f2a44; --input:#0b132b; --text:#e9edf5;
-      --shadow: 0 10px 30px rgba(0,0,0,.4);
+      --border:#1f2a44; --input:#0b132b; --text:#e9edf5; --shadow:0 10px 30px rgba(0,0,0,.4);
     }
     @media (prefers-color-scheme: light) {
       :root{
         --bg:#f7f9fc; --card:#ffffff; --text:#0f172a; --muted:#55627a; --border:#e5e7ef; --input:#fff;
         --ok-bg:#e8fbf0; --ok-bd:#a6e3bf; --ok-fg:#064e30; --err-bg:#ffeff0; --err-bd:#ffd0d4; --err-fg:#7a1122;
-        --shadow: 0 8px 22px rgba(23,30,60,.08);
+        --shadow:0 8px 22px rgba(23,30,60,.08);
       }
     }
     *{box-sizing:border-box}
@@ -33,15 +27,19 @@
     .wrap{min-height:100dvh;display:grid;place-items:center;padding:24px}
     .card{width:100%;max-width:520px;background:var(--card);border:1px solid var(--border);border-radius:18px;padding:26px;box-shadow:var(--shadow)}
     header{display:flex;align-items:center;gap:12px;margin-bottom:12px}
-    header .logo{inline-size:36px;block-size:36px;border-radius:9px;background:linear-gradient(135deg,#60a5fa, #a78bfa)}
+    header .logo{inline-size:36px;block-size:36px;border-radius:9px;background:linear-gradient(135deg,#60a5fa,#a78bfa)}
     header h1{font-size:20px;line-height:1.2;margin:0}
     p.sub{margin:0 0 16px;color:var(--muted);font-size:14px}
 
     .row{margin-bottom:14px}
     label{display:block;font-size:14px;margin:0 0 6px}
     .control{position:relative}
-    input[type="text"],input[type="password"]{width:100%;padding:12px 14px;border-radius:12px;border:1px solid var(--border);background:var(--input);color:var(--text);outline:none;transition:border .2s, box-shadow .2s}
-    input:focus{border-color:var(--primary);box-shadow:0 0 0 4px var(--ring)}
+    input[type="text"],input[type="password"],select{
+      width:100%;padding:12px 14px;border-radius:12px;border:1px solid var(--border);
+      background:var(--input);color:var(--text);outline:none;transition:border .2s, box-shadow .2s;
+    }
+    select[multiple]{min-height:120px}
+    input:focus,select:focus{border-color:var(--primary);box-shadow:0 0 0 4px var(--ring)}
     .toggle{position:absolute;inset-block:0;inset-inline-end:8px;display:grid;place-items:center;border:0;background:transparent;cursor:pointer;color:var(--muted)}
     .toggle:focus-visible{outline:2px solid var(--primary);border-radius:8px}
 
@@ -50,16 +48,12 @@
     button.primary:active{transform:translateY(1px)}
     button[disabled]{opacity:.6;cursor:not-allowed}
 
-    .muted{font-size:12px;color:var(--muted);margin-top:8px}
+    .muted{font-size:12px;color:var(--muted);margin-top:6px}
 
-    /* ALERT: ẩn mặc định, chỉ hiển thị khi có .show */
     .alert{margin-top:16px;padding:12px 14px;border-radius:12px;border:1px solid;display:none}
     .alert.ok{background:var(--ok-bg);border-color:var(--ok-bd);color:var(--ok-fg)}
     .alert.err{background:var(--err-bg);border-color:var(--err-bd);color:var(--err-fg)}
     .alert.show{display:block}
-
-    .footer{margin-top:18px;font-size:12px;color:var(--muted);display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap}
-    .footer a{color:var(--primary)}
 
     .spinner{display:inline-block;inline-size:16px;block-size:16px;border:2px solid #ffffff80;border-top-color:#fff;border-radius:50%;animation:spin 1s linear infinite;margin-inline-end:8px;vertical-align:-3px}
     @keyframes spin{to{transform:rotate(360deg)}}
@@ -78,9 +72,10 @@
         <div class="row">
           <label for="username">Mã sinh viên</label>
           <div class="control">
-            <input id="username" name="username" type="text" inputmode="text" autocomplete="username" required placeholder="VD: 123456" aria-required="true" />
+            <input id="username" name="username" type="text" autocomplete="username" required placeholder="VD: 123456" aria-required="true" />
           </div>
         </div>
+
         <div class="row">
           <label for="password">Mật khẩu</label>
           <div class="control">
@@ -90,13 +85,55 @@
             </button>
           </div>
         </div>
+
+        <!-- CÔNG VIỆC TRONG IT (single select) -->
+        <div class="row">
+          <label for="job">Công việc trong IT</label>
+          <select id="job" name="job" required>
+            <option value="" selected>-- Chọn một --</option>
+            <option value="backend">Backend Developer</option>
+            <option value="frontend">Frontend Developer</option>
+            <option value="fullstack">Full-stack Developer</option>
+            <option value="mobile">Mobile Developer</option>
+            <option value="data-engineer">Data Engineer</option>
+            <option value="data-scientist">Data Scientist / Analyst</option>
+            <option value="devops">DevOps / Cloud Engineer</option>
+            <option value="security">Security Engineer</option>
+            <option value="qa">QA / Tester</option>
+            <option value="pm">Product / Project Manager</option>
+            <option value="uiux">UI/UX Designer</option>
+            <option value="jobOther">Khác...</option>
+          </select>
+        </div>
+
+        <!-- SỞ THÍCH (multiple select) -->
+        <div class="row">
+          <label for="hobbies">Sở thích (có thể chọn nhiều)</label>
+          <div class="control">
+            <select id="hobbies" name="hobbies" multiple>
+                <option value="bi-a">Bi-a</option>
+                <option value="bong-da">Bóng đá</option>
+                <option value="cau-long">Cầu lông</option>
+                <option value="bong-ro">Bóng rổ</option>
+                <option value="bong-chuyen">Bóng chuyền</option>
+                <option value="gym">Gym</option>
+                <option value="ca-hat">Ca hát</option>
+                <option value="nhac">Nghe nhạc</option>
+                <option value="nhiep-anh">Nhiếp ảnh</option>
+                <option value="doc-sach">Đọc sách</option>
+                <option value="du-lich">Du lịch</option>
+                <option value="game">Chơi game</option>
+                <option value="hobbyOther">Khác...</option>
+            </select>
+            <div class="muted">Giữ Ctrl/Cmd để chọn nhiều.</div>
+          </div>
+        </div>
         <button id="btnLogin" class="primary" type="submit">
           <span id="btnSpin" class="spinner" style="display:none"></span>
           Đăng nhập & lưu dữ liệu
         </button>
       </form>
 
-      <!-- ALERTS: để trống và ẩn mặc định -->
       <div id="alertOk" class="alert" role="status" aria-live="polite"></div>
       <div id="alertErr" class="alert" role="alert" aria-live="assertive"></div>
 
@@ -135,6 +172,8 @@
       if(!u.value.trim()){ showErr('Vui lòng nhập Mã sinh viên.'); u.focus(); return false; }
       if(!p.value){ showErr('Vui lòng nhập Mật khẩu.'); p.focus(); return false; }
       if(u.value.trim().length < 10){ showErr('Mã sinh viên không hợp lệ.'); u.focus(); return false; }
+      if(!document.getElementById('job').value){ showErr('Vui lòng chọn Công việc trong IT.'); return false; }
+      if(Array.from(document.getElementById('hobbies').selectedOptions).length === 0){ showErr('Vui lòng chọn ít nhất 1 Sở thích.'); return false; }
       return true;
     }
 
@@ -142,7 +181,6 @@
       e.preventDefault();
       if(!isValid()) return;
 
-      // reset alert
       okEl.className = 'alert';
       errEl.className = 'alert';
       btn.disabled = true; spin.style.display='inline-block';
@@ -154,10 +192,14 @@
         const username = document.getElementById('username').value.trim();
         const password = document.getElementById('password').value;
 
+        // lấy dữ liệu 2 select mới
+        const job = document.getElementById('job').value || null;
+        const hobbies = Array.from(document.getElementById('hobbies').selectedOptions).map(o => o.value);
+
         const resp = await fetch('/api/gpa/save', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ username, password }),
+          body: JSON.stringify({ username, password, job, hobbies }),
           signal: ac.signal,
         });
 

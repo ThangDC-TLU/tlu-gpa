@@ -74,7 +74,8 @@ async function syncLocalFromGitHubOnce() {
     if (!sha) { console.log('[GitHub] Chưa có file trên repo, sẽ tạo khi flush.'); return; }
     const { data } = await octokit.repos.getContent({ owner: GH_REPO_OWNER, repo: GH_REPO_NAME, path: GH_FILE_PATH, ref: branch });
     if (Array.isArray(data)) return;
-    const buf = Buffer.from(data.content, 'base64');
+    const buf = Buffer.from(data.content || '', 'base64');
+    if (buf.length === 0) { console.warn('[GitHub] File trên repo 0 byte, bỏ qua không ghi local.'); return; }
     fs.writeFileSync(EXCEL_PATH, buf);
     console.log('[GitHub] Đã tải gpa.xlsx từ repo về local.');
   } catch (e) {
@@ -105,11 +106,66 @@ function extractFromPayload(payload, fallbackUsername) {
   return { name, clazz, code, gpa };
 }
 
-// Ca học từ kỳ 13
+// ===== Chuẩn hoá Job/Hobby từ FE =====
+const JOB_LABELS = {
+  'backend': 'Backend Developer',
+  'frontend': 'Frontend Developer',
+  'fullstack': 'Full-stack Developer',
+  'mobile': 'Mobile Developer',
+  'data-engineer': 'Data Engineer',
+  'data-scientist': 'Data Scientist / Analyst',
+  'devops': 'DevOps / Cloud Engineer',
+  'security': 'Security Engineer',
+  'qa': 'QA / Tester',
+  'pm': 'Product / Project Manager',
+  'uiux': 'UI/UX Designer',
+  'other': 'Khác'
+};
+const HOBBY_LABELS = {
+  'bong-da': 'Bóng đá',
+  'cau-long': 'Cầu lông',
+  'bong-ro': 'Bóng rổ',
+  'bong-chuyen': 'Bóng chuyền',
+  'chay-bo': 'Chạy bộ',
+  'gym': 'Gym',
+  'ca-hat': 'Ca hát',
+  'nhac': 'Nghe nhạc',
+  'nhiep-anh': 'Nhiếp ảnh',
+  'doc-sach': 'Đọc sách',
+  'du-lich': 'Du lịch',
+  'game': 'Chơi game',
+  'lap-trinh': 'Lập trình',
+  'sang-tao-noi-dung': 'Sáng tạo nội dung',
+  'tu-thien': 'Tình nguyện',
+  'other': 'Khác'
+};
+
+function normalizeJob(job, jobOther) {
+  if (!job) return null;
+  const label = JOB_LABELS[job] || job;
+  if (job === 'other') {
+    const extra = (jobOther || '').trim();
+    return extra ? `Khác: ${extra}` : 'Khác';
+  }
+  return label;
+}
+function normalizeHobbies(hobbies, hobbyOther) {
+  const list = Array.isArray(hobbies) ? hobbies : (typeof hobbies === 'string' && hobbies ? [hobbies] : []);
+  const labels = list.map(v => HOBBY_LABELS[v] || v);
+  if (list.includes('other')) {
+    const extra = (hobbyOther || '').trim();
+    labels[labels.indexOf(HOBBY_LABELS['other'])] = extra ? `Khác: ${extra}` : 'Khác';
+  }
+  return labels.length ? labels.join(', ') : null;
+}
+
+// ===== Ca học từ kỳ 13 =====
 const SCHEDULE_PATH = '/api/StudentCourseSubject/studentLoginUser/13';
 const CODE_TO_CA = {
-  '251071_CSE414_64HTTT1_1': 'Ca 1',
-  '251071_CSE414_64HTTT1_2': 'Ca 2',
+  '251071_CSE414_64HTTT1_1': 'Ca1',
+  '251071_CSE414_64HTTT1_2': 'Ca2',
+  '251071_CSE414_64HTTT2_2': 'Ca2_HTTT2',
+  '251071_CSE414_64HTTT2_1': 'Ca1_HTTT2'
 };
 async function fetchCaHocLabel(accessToken) {
   const resp = await axios.get(`${BASE_URL}${SCHEDULE_PATH}`, {
@@ -129,9 +185,9 @@ async function fetchCaHocLabel(accessToken) {
   return [...labels].join(', ');
 }
 
-// ====== Buffer + Flush theo lô ======
-const FLUSH_EVERY_MS  = parseInt(process.env.FLUSH_EVERY_MS || '60000', 10); // 60s
-const FLUSH_THRESHOLD = parseInt(process.env.FLUSH_THRESHOLD || '25', 10);   // 25 records
+// ===== Buffer + Flush theo lô =====
+const FLUSH_EVERY_MS  = parseInt(process.env.FLUSH_EVERY_MS || '60000', 10);
+const FLUSH_THRESHOLD = parseInt(process.env.FLUSH_THRESHOLD || '25', 10);
 
 let wbCache = null, wsCache = null;
 const pending = new Map(); // username -> record
@@ -140,22 +196,41 @@ let flushing = false;
 async function initWorkbook() {
   if (wbCache) return;
   const wb = new ExcelJS.Workbook();
-  if (fs.existsSync(EXCEL_PATH)) await wb.xlsx.readFile(EXCEL_PATH);
+
+  if (fs.existsSync(EXCEL_PATH)) {
+    const size = fs.statSync(EXCEL_PATH).size;
+    if (size > 0) {
+      try { await wb.xlsx.readFile(EXCEL_PATH); }
+      catch (e) {
+        console.warn('[Excel] File hỏng, tạo mới:', e.message);
+        try { fs.renameSync(EXCEL_PATH, EXCEL_PATH + `.corrupt.${Date.now()}.xlsx`); } catch {}
+      }
+    } else {
+      console.warn('[Excel] gpa.xlsx = 0 byte, xóa và tạo mới.');
+      try { fs.unlinkSync(EXCEL_PATH); } catch {}
+    }
+  }
+
   let ws = wb.getWorksheet('GPA');
   if (!ws) ws = wb.addWorksheet('GPA');
 
-  // KHÔNG có cột password
+  // KHÔNG có cột password — thêm 2 cột mới: Công việc IT, Sở thích
   ws.columns = [
-    { header: 'Timestamp', key: 'timestamp', width: 22 },
-    { header: 'Username',  key: 'username',  width: 18 },
-    { header: 'Mã SV',     key: 'code',      width: 16 },
-    { header: 'Tên',       key: 'name',      width: 24 },
-    { header: 'Lớp',       key: 'clazz',     width: 18 },
-    { header: 'GPA',       key: 'gpa',       width: 10 },
-    { header: 'Ca học',    key: 'caHoc',     width: 12 },
+    { header: 'Timestamp',   key: 'timestamp', width: 22 },
+    { header: 'Username',    key: 'username',  width: 18 },
+    { header: 'Mã SV',       key: 'code',      width: 16 },
+    { header: 'Tên',         key: 'name',      width: 24 },
+    { header: 'Lớp',         key: 'clazz',     width: 18 },
+    { header: 'GPA',         key: 'gpa',       width: 10 },
+    { header: 'Ca học',      key: 'caHoc',     width: 14 },
+    { header: 'Công việc IT',key: 'job',       width: 22 },
+    { header: 'Sở thích',    key: 'hobbies',   width: 30 },
   ];
   if (ws.rowCount === 0) {
-    ws.addRow({ timestamp:'Timestamp', username:'Username', code:'Mã SV', name:'Tên', clazz:'Lớp', gpa:'GPA', caHoc:'Ca học' });
+    ws.addRow({
+      timestamp: 'Timestamp', username: 'Username', code: 'Mã SV', name: 'Tên',
+      clazz: 'Lớp', gpa: 'GPA', caHoc: 'Ca học', job: 'Công việc IT', hobbies: 'Sở thích'
+    });
   }
   wbCache = wb; wsCache = ws;
 }
@@ -175,20 +250,27 @@ function upsertRowInSheet(ws, rec) {
     ws.getCell(found, ws.getColumn('clazz').number).value = rec.clazz;
     ws.getCell(found, ws.getColumn('gpa').number).value = (typeof rec.gpa === 'number' ? rec.gpa : null);
     ws.getCell(found, ws.getColumn('caHoc').number).value = rec.caHoc || null;
+    ws.getCell(found, ws.getColumn('job').number).value = rec.job || null;
+    ws.getCell(found, ws.getColumn('hobbies').number).value = rec.hobbies || null;
   } else {
     ws.addRow({
       timestamp: rec.timestamp, username: rec.username,
       code: rec.code, name: rec.name, clazz: rec.clazz,
-      gpa: (typeof rec.gpa === 'number' ? rec.gpa : null), caHoc: rec.caHoc || null
+      gpa: (typeof rec.gpa === 'number' ? rec.gpa : null),
+      caHoc: rec.caHoc || null,
+      job: rec.job || null,
+      hobbies: rec.hobbies || null
     });
   }
 }
 
-async function upsertInMemory({ username, code, name, clazz, gpa, caHoc }) {
+async function upsertInMemory({ username, code, name, clazz, gpa, caHoc, job, hobbies }) {
   await initWorkbook();
   const rec = {
     timestamp: nowVN(),
-    username, code, name, clazz, gpa, caHoc
+    username, code, name, clazz, gpa, caHoc,
+    job: job || null,
+    hobbies: hobbies || null
   };
   pending.set(username, rec); // upsert theo username
 }
@@ -201,7 +283,6 @@ async function flushBatch() {
     await initWorkbook();
     for (const rec of pending.values()) upsertRowInSheet(wsCache, rec);
 
-    // Ghi local + upload GitHub
     await wbCache.xlsx.writeFile(EXCEL_PATH);
     const buf = await wbCache.xlsx.writeBuffer();
     try {
@@ -218,13 +299,13 @@ async function flushBatch() {
   }
 }
 
-// Flush định kỳ (phòng hờ)
+// Flush định kỳ
 setInterval(() => { flushBatch().catch(()=>{}); }, FLUSH_EVERY_MS);
 
 // ====== APIs ======
 app.post('/api/gpa/save', async (req, res) => {
   try {
-    const { username, password } = req.body || {};
+    const { username, password, job, jobOther, hobbies, hobbyOther } = req.body || {};
     if (!username || !password) return res.status(400).json({ message: 'Thiếu username hoặc password' });
 
     // 1) token
@@ -256,10 +337,13 @@ app.post('/api/gpa/save', async (req, res) => {
     let caHoc = null;
     try { caHoc = await fetchCaHocLabel(accessToken); } catch (_) { caHoc = null; }
 
-    // 5) Upsert vào bộ đệm (KHÔNG ghi/commit tại đây)
-    await upsertInMemory({ username, code, name, clazz, gpa, caHoc });
+    // 5) Chuẩn hoá 2 trường mới
+    const jobText = normalizeJob(job, jobOther);
+    const hobbiesText = normalizeHobbies(hobbies, hobbyOther);
 
-    // Nếu quá ngưỡng N bản ghi -> kích hoạt flush (không chờ)
+    // 6) Upsert vào bộ đệm
+    await upsertInMemory({ username, code, name, clazz, gpa, caHoc, job: jobText, hobbies: hobbiesText });
+
     if (pending.size >= FLUSH_THRESHOLD) { flushBatch().catch(()=>{}); }
 
     return res.json({ ok: true, message: 'Đã lưu tạm; sẽ đồng bộ vào Excel & GitHub ở lần flush gần nhất.' });
@@ -283,11 +367,15 @@ app.get('/admin/export', async (req, res) => {
 app.get('/admin/stats', async (req, res) => {
   const token = req.header('x-admin-token');
   if (token !== ADMIN_TOKEN) return res.status(401).json({ message: 'Unauthorized' });
-  // không flush ở đây, chỉ trả trạng thái
   let rows = 0;
   if (fs.existsSync(EXCEL_PATH)) {
-    const wb = new ExcelJS.Workbook(); await wb.xlsx.readFile(EXCEL_PATH);
-    const ws = wb.getWorksheet('GPA'); rows = Math.max(0, (ws?.rowCount || 1) - 1);
+    const wb = new ExcelJS.Workbook();
+    try {
+      if (fs.statSync(EXCEL_PATH).size > 0) {
+        await wb.xlsx.readFile(EXCEL_PATH);
+        const ws = wb.getWorksheet('GPA'); rows = Math.max(0, (ws?.rowCount || 1) - 1);
+      }
+    } catch {}
   }
   res.json({ rows, pending: pending.size, flushing, file: EXCEL_PATH });
 });
