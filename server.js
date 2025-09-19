@@ -163,9 +163,7 @@ function normalizeHobbies(hobbies, hobbyOther) {
 const SCHEDULE_PATH = '/api/StudentCourseSubject/studentLoginUser/13';
 const CODE_TO_CA = {
   '251071_CSE414_64HTTT1_1': 'Ca1',
-  '251071_CSE414_64HTTT1_2': 'Ca2',
-  '251071_CSE414_64HTTT2_2': 'Ca2_HTTT2',
-  '251071_CSE414_64HTTT2_1': 'Ca1_HTTT2'
+  '251071_CSE414_64HTTT1_2': 'Ca2'
 };
 async function fetchCaHocLabel(accessToken) {
   const resp = await axios.get(`${BASE_URL}${SCHEDULE_PATH}`, {
